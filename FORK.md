@@ -29,20 +29,41 @@ release would be costly. Installing from this fork removes that automatic path.
 
 ## Changes on top of upstream
 
-`package.json` only, so that `npm install -g git+https://github.com/Soborbo/mxroute-cli.git#<sha>`
-works — upstream never had to support installing from git, because it publishes to npm:
+`package.json` only:
 
-- `prepare`: `husky` -> `npm run build`. `dist/` is gitignored, so a git install produced a
-  package with no compiled output. `prepare` is the hook npm runs after cloning.
-- `postbuild`: `chmod +x ...` -> equivalent `node -e` call. `chmod` does not exist in the
-  Windows shell npm uses, which broke the build there.
+- `prepare`: `husky` -> `npm run build`. `dist/` is gitignored, so the repo has no compiled
+  output of its own.
+- `postbuild`: `chmod +x ...` -> equivalent `node -e` call. `chmod` does not exist in the shell
+  npm uses on Windows, which broke the build there.
+
+## Installing
+
+`npm install -g git+https://github.com/Soborbo/mxroute-cli.git#<sha>` does **not** work: npm runs
+`prepare` before the runtime dependencies are present, so `tsc` fails on `Cannot find module
+'chalk'`. Upstream never had to support installing from git, because it publishes to npm. Build
+and install the tarball instead — same pin, and it is byte-for-byte what `npm publish` would ship:
+
+```bash
+git clone https://github.com/Soborbo/mxroute-cli.git && cd mxroute-cli
+npm ci && npm run build && npm pack
+npm install -g ./mxroute-cli-<version>.tgz
+```
+
+Verify the global install is this fork and not the registry copy — the registry copy has
+`"prepare": "husky"`:
+
+```bash
+node -p "require(require('child_process').execSync('npm root -g').toString().trim() + '/mxroute-cli/package.json').scripts.prepare"
+# -> npm run build
+```
 
 ## Updating
 
-Do not run `mxroute update` — it would pull upstream npm and undo the pin.
+Do not run `mxroute update` — it runs `npm install -g mxroute-cli@latest`, which would replace
+this fork with the upstream registry build and silently undo the pin.
 
 ```bash
 git fetch upstream && git log --oneline HEAD..upstream/main   # review every commit
 git merge upstream/main                                       # then re-run the audit above
-npm install -g "git+https://github.com/Soborbo/mxroute-cli.git#<new-sha>"
+npm ci && npm run build && npm pack && npm install -g ./mxroute-cli-<version>.tgz
 ```
